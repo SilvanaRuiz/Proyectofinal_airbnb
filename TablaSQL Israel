@@ -1,0 +1,62 @@
+#### -- Crear la tabla airbnb_listings
+CREATE TABLE airbnb_listings (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT 'Identificador único autoincremental',
+    unique_id VARCHAR(50) UNIQUE NOT NULL COMMENT 'ID único de Airbnb para el listado',
+    name VARCHAR(200) NOT NULL COMMENT 'Nombre del listado',
+    price DECIMAL(10, 2) NOT NULL COMMENT 'Precio por noche en la moneda local',
+    currency CHAR(3) DEFAULT 'USD' COMMENT 'Código de moneda ISO 4217',
+    room_type ENUM('Entire home/apt', 'Private room', 'Shared room') COMMENT 'Tipo de alojamiento',
+    property_type VARCHAR(50) COMMENT 'Tipo de propiedad (casa, apartamento, etc.)',
+    bedrooms TINYINT UNSIGNED COMMENT 'Número de dormitorios',
+    bathrooms DECIMAL(3, 1) UNSIGNED COMMENT 'Número de baños',
+    accommodates TINYINT UNSIGNED COMMENT 'Número máximo de huéspedes',
+    review_count INT UNSIGNED DEFAULT 0 COMMENT 'Número total de reseñas',
+    review_score DECIMAL(3, 2) COMMENT 'Puntuación promedio de las reseñas (0-5)',
+    review_cleanliness DECIMAL(3, 2) COMMENT 'Puntuación de limpieza (0-5)',
+    review_location DECIMAL(3, 2) COMMENT 'Puntuación de ubicación (0-5)',
+    latitude DECIMAL(10, 8) COMMENT 'Latitud de la ubicación',
+    longitude DECIMAL(11, 8) COMMENT 'Longitud de la ubicación',
+    neighborhood VARCHAR(100) COMMENT 'Barrio o área',
+    city VARCHAR(100) COMMENT 'Ciudad',
+    state VARCHAR(100) COMMENT 'Estado o región',
+    country VARCHAR(100) COMMENT 'País',
+    is_superhost BOOLEAN DEFAULT FALSE COMMENT 'Indica si el anfitrión es superhost',
+    instant_bookable BOOLEAN DEFAULT FALSE COMMENT 'Indica si se puede reservar instantáneamente',
+    cancellation_policy ENUM('flexible', 'moderate', 'strict', 'super_strict_30', 'super_strict_60') COMMENT 'Política de cancelación',
+    minimum_nights SMALLINT UNSIGNED DEFAULT 1 COMMENT 'Número mínimo de noches para reservar',
+    maximum_nights SMALLINT UNSIGNED COMMENT 'Número máximo de noches para reservar',
+    availability_30 TINYINT UNSIGNED COMMENT 'Días disponibles en los próximos 30 días',
+    availability_60 TINYINT UNSIGNED COMMENT 'Días disponibles en los próximos 60 días',
+    availability_90 TINYINT UNSIGNED COMMENT 'Días disponibles en los próximos 90 días',
+    availability_365 SMALLINT UNSIGNED COMMENT 'Días disponibles en el próximo año',
+    last_scraped DATETIME NOT NULL COMMENT 'Fecha y hora del último scraping',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT 'Fecha y hora de creación del registro',
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT 'Fecha y hora de última actualización del registro',
+    
+    INDEX idx_price (price) COMMENT 'Índice para búsquedas por precio',
+    INDEX idx_review_score (review_score) COMMENT 'Índice para búsquedas por puntuación',
+    INDEX idx_room_type (room_type) COMMENT 'Índice para búsquedas por tipo de habitación',
+    INDEX idx_location (latitude, longitude) COMMENT 'Índice para búsquedas geográficas',
+    INDEX idx_city_country (city, country) COMMENT 'Índice para búsquedas por ciudad y país',
+    INDEX idx_last_scraped (last_scraped) COMMENT 'Índice para búsquedas por fecha de scraping',
+    
+    CONSTRAINT chk_price CHECK (price >= 0) COMMENT 'Asegura que el precio no sea negativo',
+    CONSTRAINT chk_review_score CHECK (review_score >= 0 AND review_score <= 5) COMMENT 'Asegura que la puntuación esté entre 0 y 5',
+    CONSTRAINT chk_review_cleanliness CHECK (review_cleanliness >= 0 AND review_cleanliness <= 5) COMMENT 'Asegura que la puntuación de limpieza esté entre 0 y 5',
+    CONSTRAINT chk_review_location CHECK (review_location >= 0 AND review_location <= 5) COMMENT 'Asegura que la puntuación de ubicación esté entre 0 y 5',
+    CONSTRAINT chk_latitude CHECK (latitude >= -90 AND latitude <= 90) COMMENT 'Asegura que la latitud esté entre -90 y 90',
+    CONSTRAINT chk_longitude CHECK (longitude >= -180 AND longitude <= 180) COMMENT 'Asegura que la longitud esté entre -180 y 180'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+COMMENT 'Tabla que almacena información detallada de listados de Airbnb';
+
+-- Crear un trigger para actualizar la fecha de última modificación
+DELIMITER //
+CREATE TRIGGER before_airbnb_listings_update 
+BEFORE UPDATE ON airbnb_listings
+FOR EACH ROW 
+BEGIN
+    SET NEW.updated_at = NOW();
+END;//
+DELIMITER ; 
+
+####
