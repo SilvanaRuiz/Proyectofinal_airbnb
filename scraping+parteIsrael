@@ -1,0 +1,144 @@
+import requests 
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from time import sleep
+import pandas as pd
+from datetime import datetime
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+
+#Configuración de WebDriver
+options = webdriver.ChromeOptions()
+options.add_argument("--disable-search-engine-choice-screen")
+options.add_argument("--headless")
+browser = webdriver.Chrome(options=options)
+
+#Función de scraping (mantenida del código original)
+def scrape_urls():
+    sleep(5)
+    listings = browser.find_elements(By.XPATH, '//a[contains(@href, "/rooms/")]')
+    urls = [listing.get_attribute('href') for listing in listings]
+    return urls
+
+#Función para extraer datos de una URL específica
+def scrape_listing_data(url):
+    browser.get(url)
+    sleep(5)
+    
+    try:
+        name = browser.find_element(By.XPATH, '//h1').text
+        price = browser.find_element(By.XPATH, '//span[@class="_tyxjp1"]').text
+        rating = browser.find_element(By.XPATH, '//span[@class="_12si43g"]').text
+        reviews = browser.find_element(By.XPATH, '//span[@class="_1qx9l5ba"]').text
+        cleanliness = browser.find_element(By.XPATH, '//span[contains(text(), "Cleanliness")]/following-sibling::span').text
+        location = browser.find_element(By.XPATH, '//span[contains(text(), "Location")]/following-sibling::span').text
+    except NoSuchElementException:
+        return None
+
+    return {
+        'url': url,
+        'name': name,
+        'price': price,
+        'rating': rating,
+        'reviews': reviews,
+        'cleanliness': cleanliness,
+        'location': location,
+        'scrape_timestamp': datetime.now()
+    }
+
+#Función de limpieza y modelado de datos
+def clean_and_model_data(df):
+    df['price'] = df['price'].str.replace('$', '').str.replace(',', '').astype(float)
+    df['rating'] = df['rating'].astype(float)
+    df['reviews'] = df['reviews'].str.extract('(\d+)').astype(int)
+    df['cleanliness'] = df['cleanliness'].astype(float)
+    df['location'] = df['location'].astype(float)
+    df['unique_id'] = df['url'].str.extract('/rooms/(\d+)')
+    return df
+
+#Configuración de la base de datos
+Base = declarative_base()
+
+class AirbnbListing(Base):
+    __tablename__ = 'airbnb_listings'
+
+    id = Column(Integer, primary_key=True)
+    unique_id = Column(String(50), unique=True)
+    name = Column(String(200))
+    price = Column(Float)
+    review_count = Column(Integer)
+    review_score = Column(Float)
+    review_cleanliness = Column(Float)
+    review_location = Column(Float)
+    scrape_timestamp = Column(DateTime)
+
+#Función para crear el schema y popular la base de datos
+def create_schema_and_populate_db(df):
+    engine = create_engine('mysql://username:password@localhost/airbnb_db')
+    Base.metadata.create_all(engine)
+
+    Session = sessionmaker(bind=engine)
+    session = Session()
+
+    for _, row in df.iterrows():
+        listing = AirbnbListing(
+            unique_id=row['unique_id'],
+            name=row['name'],
+            price=row['price'],
+            review_count=row['reviews'],
+            review_score=row['rating'],
+            review_cleanliness=row['cleanliness'],
+            review_location=row['location'],
+            scrape_timestamp=row['scrape_timestamp']
+        )
+        session.merge(listing)  #Usa merge para actualizar si ya existe
+
+    session.commit()
+    session.close()
+
+#Función principal
+def main():
+    url = 'https://www.airbnb.com/s/Nottingham--England--United-Kingdom/homes'
+    browser.get(url)
+    all_urls = []
+
+    #Recopilación de URLs
+    while True:
+        page_urls = scrape_urls()
+        all_urls.extend(page_urls)
+        try:
+            next_button = browser.find_element(By.XPATH, '//a[@aria-label="Next"]')
+            next_button.click()
+            sleep(5)
+        except NoSuchElementException:
+            break
+
+    all_urls = list(set(all_urls))  #Eliminar duplicados
+
+    #Scraping de datos de cada listado
+    all_data = []
+    for url in all_urls:
+        listing_data = scrape_listing_data(url)
+        if listing_data:
+            all_data.append(listing_data)
+
+    #Crear DataFrame
+    df = pd.DataFrame(all_data)
+
+    #Limpiar y modelar datos
+    df_clean = clean_and_model_data(df)
+
+    #Crear schema y popular la base de datos
+    create_schema_and_populate_db(df_clean)
+
+    print("Datos procesados y almacenados en la base de datos con éxito.")
+
+    browser.quit()
+
+if __name__ == "__main__":
+    main()
