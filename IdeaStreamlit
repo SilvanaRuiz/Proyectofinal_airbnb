@@ -1,0 +1,49 @@
+####Streamlit
+
+
+import streamlit as st
+import requests
+import os
+
+#Obtener la clave API de una variable de entorno (más seguro)
+UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY", "qIKU6eUBiJ8lMpCHpqcodHhixpEMvX-yh6UVam0whxQ") ####MODIFICAR 
+
+def intro():
+    st.title(":blue[_Bienvenido a tu app de Airbnb_]")
+    st.markdown("Esta aplicación te permitirá realizar un estudio de mercado a través de la exploración de distintos alojamientos de Airbnb en la ciudad de tu elección. Con ella, podrás analizar datos clave para obtener una visión más clara sobre tendencias, precios y oportunidades del mercado en tu área de interés.")
+
+    #Solicitar el nombre de la ciudad
+    city = st.text_input("Inserte el nombre de su ciudad:")
+
+    if city:
+        #Endpoint de Unsplash para buscar fotos de la ciudad
+        url = f"https://api.unsplash.com/search/photos?query={city}&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
+
+        #Realizar la solicitud a Unsplash
+        response = requests.get(url)
+
+        #Verificar si la solicitud fue exitosa
+        if response.status_code == 200:
+            data = response.json()
+            if data["results"]:
+                #Obtener la URL de la primera imagen
+                image_url = data["results"][0]["urls"]["regular"]
+                st.image(image_url, caption=f"Foto de {city}")
+            else:
+                st.write("No se encontraron imágenes para la ciudad solicitada.")
+        else:
+            st.write("Error al conectarse a la API de Unsplash.")
+    else:
+        st.write("Por favor, ingrese el nombre de una ciudad.")
+
+def page_1():
+    st.title("Prueba")
+    st.write("Esta es la página de prueba.")
+
+st.sidebar.title("Indice")
+page = st.sidebar.selectbox("Selecciona una página", ("Inicio", "Prueba"))
+
+if page == "Inicio":
+    intro()
+elif page == "Prueba":
+    page_1()
