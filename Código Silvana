@@ -1,0 +1,202 @@
+import requests 
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from time import sleep
+import pandas as pd
+from datetime import datetime
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from tqdm import tqdm
+import signal
+from retrying import retry
+import numpy as np
+import logging
+
+#Configuración de logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+#Configuración de WebDriver
+options = webdriver.ChromeOptions()
+options.add_argument("--disable-search-engine-choice-screen")
+options.add_argument("--headless")
+browser = webdriver.Chrome(options=options)
+
+#Función de scraping
+def scrape_urls():
+    WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.XPATH, '//a[contains(@href, "/rooms/")]')))
+    listings = browser.find_elements(By.XPATH, '//a[contains(@href, "/rooms/")]')
+    urls = [listing.get_attribute('href') for listing in listings]
+    return urls
+
+#Función para extraer datos de una URL específica
+@retry(stop_max_attempt_number=3, wait_fixed=2000)
+def scrape_listing_data(url):
+    try:
+        browser.get(url)
+        WebDriverWait(browser, 10).until(EC.presence_of_element_located((By.XPATH, '//h1')))
+        
+        data = {
+            'url': url,
+            'name': '',
+            'price': '',
+            'rating': '',
+            'reviews': '',
+            'cleanliness': '',
+            'location': '',
+            'scrape_timestamp': datetime.now()
+        }
+
+        for key, xpath in {
+            'name': '//h1',
+            'price': '//span[@class="_tyxjp1"]',
+            'rating': '//span[@class="_12si43g"]',
+            'reviews': '//span[@class="_1qx9l5ba"]',
+            'cleanliness': '//span[contains(text(), "Cleanliness")]/following-sibling::span',
+            'location': '//span[contains(text(), "Location")]/following-sibling::span'
+        }.items():
+            try:
+                data[key] = browser.find_element(By.XPATH, xpath).text
+            except NoSuchElementException:
+                logging.warning(f"No se encontró {key} para la URL: {url}")
+
+        return data
+
+    except TimeoutException:
+        logging.error(f"Timeout al cargar la página: {url}")
+        return None
+    except Exception as e:
+        logging.error(f"Error al procesar {url}: {str(e)}")
+        return None
+
+#Función de limpieza y modelado de datos
+def clean_and_model_data(df):
+    for column in ['price', 'rating', 'cleanliness', 'location']:
+        if column in df.columns:
+            df[column] = df[column].replace(['', None], np.nan)
+            df[column] = pd.to_numeric(df[column].str.replace('$', '').str.replace(',', ''), errors='coerce')
+        else:
+            logging.warning(f"Advertencia: La columna '{column}' no está presente en el DataFrame")
+            df[column] = np.nan
+
+    if 'reviews' in df.columns:
+        df['reviews'] = df['reviews'].str.extract(r'(\d+)').astype(float)
+    else:
+        df['reviews'] = np.nan
+
+    if 'url' in df.columns:
+        df['unique_id'] = df['url'].str.extract(r'/rooms/(\d+)')
+    else:
+        logging.warning("Advertencia: La columna 'url' no está presente en el DataFrame")
+        df['unique_id'] = np.nan
+
+    return df
+
+#Configuración de la base de datos
+Base = declarative_base()
+
+class AirbnbListing(Base):
+    __tablename__ = 'airbnb_listings'
+
+    id = Column(Integer, primary_key=True)
+    unique_id = Column(String(50), unique=True)
+    name = Column(String(200))
+    price = Column(Float)
+    review_count = Column(Integer)
+    review_score = Column(Float)
+    review_cleanliness = Column(Float)
+    review_location = Column(Float)
+    scrape_timestamp = Column(DateTime)
+
+#Función para guardar datos en CSV y MySQL
+def save_data(df, csv_filename):
+    #Guardar en CSV
+    df.to_csv(csv_filename, index=False)
+    logging.info(f"Datos guardados en {csv_filename}")
+
+    #Guardar en MySQL
+    try:
+        engine = create_engine('mysql://username:password@localhost/airbnb_db')
+        Base.metadata.create_all(engine)
+
+        Session = sessionmaker(bind=engine)
+        session = Session()
+
+        for _, row in df.iterrows():
+            listing = AirbnbListing(
+                unique_id=row['unique_id'],
+                name=row['name'],
+                price=row['price'],
+                review_count=row['reviews'],
+                review_score=row['rating'],
+                review_cleanliness=row['cleanliness'],
+                review_location=row['location'],
+                scrape_timestamp=row['scrape_timestamp']
+            )
+            session.merge(listing)  # Usa merge para actualizar si ya existe
+
+        session.commit()
+        session.close()
+        logging.info("Datos almacenados en la base de datos MySQL")
+    except Exception as e:
+        logging.error(f"Error al guardar en MySQL: {str(e)}")
+
+#Manejador de señal para interrupción
+def signal_handler(signum, frame):
+    logging.info("Interrupción detectada. Guardando datos parciales...")
+    save_data(pd.DataFrame(all_data), "interrupted_data.csv")
+    browser.quit()
+    exit(1)
+
+#Función principal
+def main():
+    signal.signal(signal.SIGINT, signal_handler)
+
+    url = 'https://www.airbnb.com/s/Nottingham--England--United-Kingdom/homes'
+    browser.get(url)
+    all_urls = []
+
+    #Recopilación de URLs
+    while True:
+        page_urls = scrape_urls()
+        all_urls.extend(page_urls)
+        try:
+            next_button = WebDriverWait(browser, 10).until(
+                EC.element_to_be_clickable((By.XPATH, '//a[@aria-label="Next"]'))
+            )
+            next_button.click()
+            sleep(5)
+        except (TimeoutException, NoSuchElementException):
+            break
+
+    all_urls = list(set(all_urls))  # Eliminar duplicados
+
+    #Scraping de datos de cada listado
+    all_data = []
+    for i, url in enumerate(tqdm(all_urls, desc="Scraping listings")):
+        listing_data = scrape_listing_data(url)
+        if listing_data:
+            all_data.append(listing_data)
+        
+        if i % 100 == 0 and i > 0:
+            save_data(pd.DataFrame(all_data), f"partial_data_{i}.csv")
+
+    #Crear DataFrame
+    df = pd.DataFrame(all_data)
+
+    #Limpiar y modelar datos
+    df_clean = clean_and_model_data(df)
+
+    #Guardar datos finales en CSV y MySQL
+    save_data(df_clean, "airbnb_listings_final.csv")
+
+    logging.info("Datos procesados y guardados en CSV y MySQL con éxito.")
+
+    browser.quit()
+
+if __name__ == "__main__":
+    main()
