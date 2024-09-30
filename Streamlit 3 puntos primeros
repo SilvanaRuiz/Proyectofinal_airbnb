@@ -1,0 +1,62 @@
+airbnb_streamlit_app/
+│
+├── .env
+├── .gitignore
+├── requirements.txt
+├── README.md
+├── app.py
+├── scraper/
+│   ├── __init__.py
+│   ├── airbnb_scraper.py
+│   └── data_cleaner.py
+└── data/
+    └── airbnb_listings.csv
+
+
+python -m venv venv
+source venv/bin/activate  # En Windows: venv\Scripts\activate
+
+streamlit
+pandas
+numpy
+selenium
+beautifulsoup4
+sqlalchemy
+python-dotenv
+
+pip install -r requirements.txt
+
+DB_USERNAME = your_username
+DB_PASSWORD = your_password
+DB_HOST = your_host
+DB_NAME = your_database_name
+
+import streamlit as st
+import pandas as pd
+from dotenv import load_dotenv
+import os
+
+#Cargar variables de entorno
+load_dotenv()
+
+#Configuración de la página
+st.set_page_config(
+    page_title="Airbnb Data Explorer",
+    page_icon="🏠",
+    layout="wide"
+)
+
+#Título de la aplicación
+st.title("Airbnb Data Explorer")
+
+#Cargar datos
+@st.cache_data
+def load_data():
+    return pd.read_csv('data/airbnb_listings.csv')
+
+df = load_data()
+
+#Mostrar los primeros registros
+st.write(df.head())
+
+#Se puede agregar más elementos de Streamlit
