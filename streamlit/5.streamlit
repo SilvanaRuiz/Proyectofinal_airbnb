@@ -1,0 +1,139 @@
+import streamlit as st
+
+def main():
+    st.set_page_config(layout="wide")
+    st.title("Análisis de Airbnb")
+
+    # Sidebar para navegación
+    page = st.sidebar.selectbox("Selecciona una página", ["Dashboard", "Análisis de Reseñas", "Análisis de Publicación", "Modelo de Predicción"])
+
+    if page == "Dashboard":
+        dashboard_view()
+    elif page == "Análisis de Reseñas":
+        reviews_view()
+    elif page == "Análisis de Publicación":
+        listing_view()
+    elif page == "Modelo de Predicción":
+        prediction_view()
+
+def dashboard_view():
+    st.header("Dashboard Exploratorio")
+
+    # Placeholders para filtros
+    st.sidebar.subheader("Filtros")
+    st.sidebar.slider("Rango de precios", 0, 1000, (50, 300))
+    st.sidebar.multiselect("Tipo de propiedad", ["Apartamento", "Casa", "Habitación privada"])
+    st.sidebar.slider("Número de habitaciones", 1, 10, 1)
+    st.sidebar.slider("Calificación mínima", 1.0, 5.0, 4.0)
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Placeholder para el mapa
+        st.subheader("Mapa de Airbnbs")
+        st.empty()  # Aquí irá el mapa
+
+        # Placeholder para gráfico de barras
+        st.subheader("Precios promedio por vecindario")
+        st.empty()  # Aquí irá el gráfico de barras
+
+    with col2:
+        # Placeholder para gráfico circular
+        st.subheader("Distribución de tipos de propiedades")
+        st.empty()  # Aquí irá el gráfico circular
+
+        # Placeholder para histograma
+        st.subheader("Distribución de calificaciones")
+        st.empty()  # Aquí irá el histograma
+
+    # Placeholder para gráfico de líneas
+    st.subheader("Ocupación a lo largo del tiempo")
+    st.empty()  # Aquí irá el gráfico de líneas
+
+def reviews_view():
+    st.header("Análisis de Reseñas")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Placeholder para nube de palabras
+        st.subheader("Nube de palabras de reseñas")
+        st.empty()  # Aquí irá la nube de palabras
+
+        # Placeholder para gráfico de barras de sentimientos
+        st.subheader("Sentimientos de las reseñas")
+        st.empty()  # Aquí irá el gráfico de barras
+
+    with col2:
+        # Placeholder para gráfico de líneas de evolución de calificaciones
+        st.subheader("Evolución de calificaciones")
+        st.empty()  # Aquí irá el gráfico de líneas
+
+        # Placeholder para análisis de temas
+        st.subheader("Análisis de temas (LDA)")
+        st.empty()  # Aquí irá la visualización de LDA
+
+    # Placeholder para red de palabras clave
+    st.subheader("Red de palabras clave co-ocurrentes")
+    st.empty()  # Aquí irá la red de palabras
+
+def listing_view():
+    st.header("Análisis de Publicación Individual")
+
+    # Campo para ingresar el enlace de la publicación
+    listing_url = st.text_input("Ingrese el enlace de la publicación de Airbnb")
+
+    if listing_url:
+        col1, col2 = st.columns(2)
+
+        with col1:
+            # Placeholder para análisis de sentimiento
+            st.subheader("Análisis de sentimiento de reseñas")
+            st.empty()  # Aquí irá el análisis de sentimiento
+
+            # Placeholder para temas principales
+            st.subheader("Temas principales mencionados")
+            st.empty()  # Aquí irán los temas principales
+
+        with col2:
+            # Placeholder para métrica de calidad
+            st.subheader("Métrica de calidad")
+            st.empty()  # Aquí irá la métrica de calidad
+
+            # Placeholder para gráfico de radar comparativo
+            st.subheader("Comparación con el promedio de la zona")
+            st.empty()  # Aquí irá el gráfico de radar
+
+        # Placeholder para gráfico de barras de precios similares
+        st.subheader("Precios de publicaciones similares")
+        st.empty()  # Aquí irá el gráfico de barras
+
+def prediction_view():
+    st.header("Modelo de Predicción")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        # Placeholder para descripción de la metodología
+        st.subheader("Metodología")
+        st.text("Aquí irá la descripción de la metodología utilizada")
+
+        # Placeholder para visualización de características importantes
+        st.subheader("Características importantes del modelo")
+        st.empty()  # Aquí irá la visualización de características
+
+    with col2:
+        # Placeholder para gráfico de dispersión
+        st.subheader("Predicciones vs Valores reales")
+        st.empty()  # Aquí irá el gráfico de dispersión
+
+        # Placeholder para métricas de rendimiento
+        st.subheader("Métricas de rendimiento")
+        st.empty()  # Aquí irán las métricas
+
+    # Placeholder para gráfico de residuos
+    st.subheader("Gráfico de residuos")
+    st.empty()  # Aquí irá el gráfico de residuos
+
+if __name__ == "__main__":
+    main()
