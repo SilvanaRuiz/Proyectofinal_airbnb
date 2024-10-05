@@ -1,0 +1,49 @@
+# Crea un entorno virtual e instala las dependencias necesarias:
+
+python -m venv venv
+source venv/bin/activate  #En Windows, usa `venv\Scripts\activate`
+pip install streamlit pandas plotly folium streamlit-folium nltk scikit-learn matplotlib seaborn python-dotenv requests beautifulsoup4
+
+# Crea un archivo .env en la raíz del proyecto para almacenar información sensible:
+
+DB_USUARIO=tu_usuario
+DB_CONTRASENA=tu_contrasena
+DB_HOST=tu_host
+DB_NOMBRE=nombre_de_tu_base_de_datos
+
+# Crea un archivo requirements.txt con todas las dependencias:
+
+streamlit
+pandas
+plotly
+folium
+streamlit-folium
+nltk
+scikit-learn
+matplotlib
+seaborn
+python-dotenv
+requests
+beautifulsoup4
+
+# Organiza la estructura de tu proyecto:
+
+analisis_airbnb/
+├── .env
+├── requirements.txt
+├── app.py
+├── datos/
+│   └── (coloca tus archivos de datos aquí)
+├── modelos/
+│   └── (coloca tus modelos entrenados aquí)
+└── utilidades/
+    └── (coloca funciones de utilidad aquí)
+
+####Esto falta, ayuda
+
+#Reemplaza las funciones de marcador de posición (por ejemplo, conectar_a_base_de_datos(), ejecutar_proceso_etl(), cargar_datos()) con implementaciones reales.
+#Implementa las visualizaciones y análisis faltantes en cada sección
+
+#Ejecutar la función
+
+streamlit run app.py
