@@ -1,0 +1,258 @@
+### Aplicación Streamlit
+
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import folium
+from streamlit_folium import folium_static
+import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
+import requests
+from bs4 import BeautifulSoup
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+from dotenv import load_dotenv
+import os
+
+# Cargar variables de entorno
+load_dotenv()
+
+# Configurar la página
+st.set_page_config(page_title="Análisis de Mercado de Airbnb", layout="wide")
+
+# Inicializar el estado de la sesión
+if 'anuncios_analizados' not in st.session_state:
+    st.session_state.anuncios_analizados = pd.DataFrame()
+
+# Conexión a la base de datos (marcador de posición)
+def conectar_a_base_de_datos():
+    # Reemplazar con el código real de conexión a la base de datos
+    pass
+
+# Proceso ETL (marcador de posición)
+def ejecutar_proceso_etl():
+    # Reemplazar con el proceso ETL real
+    pass
+
+# Cargar datos (marcador de posición)
+@st.cache_data
+def cargar_datos():
+    # Reemplazar con el código real de carga de datos
+    return pd.DataFrame()
+
+def intro():
+    st.title(":blue[_Bienvenido a tu app de Airbnb_]")
+    st.markdown("Esta aplicación te permitirá realizar un estudio de mercado a través de la exploración de distintos alojamientos de Airbnb en la ciudad de tu elección. Con ella, podrás analizar datos clave para obtener una visión más clara sobre tendencias, precios y oportunidades del mercado en tu área de interés.")
+
+    # API de Unsplash (necesitas tu propia API key)
+    UNSPLASH_ACCESS_KEY = "qIKU6eUBiJ8lMpCHpqcodHhixpEMvX-yh6UVam0whxQ"
+
+    # Solicitar el nombre de la ciudad
+    city = st.text_input("Inserte el nombre de su ciudad:")
+
+    if city:
+        # Endpoint de Unsplash para buscar fotos de la ciudad
+        url = f"https://api.unsplash.com/search/photos?query={city}&client_id={UNSPLASH_ACCESS_KEY}&per_page=1"
+
+        # Realizar la solicitud a Unsplash
+        response = requests.get(url)
+
+        # Verificar si la solicitud fue exitosa
+        if response.status_code == 200:
+            data = response.json()
+            if data["results"]:
+                # Obtener la URL de la primera imagen
+                image_url = data["results"][0]["urls"]["regular"]
+                st.image(image_url, caption=f"Foto de {city}")
+            else:
+                st.write("No se encontraron imágenes para la ciudad solicitada.")
+        else:
+            st.write("Error al conectarse a la API de Unsplash.")
+
+# Panel principal
+def panel_principal():
+    st.header("Panel de Análisis de Mercado de Airbnb")
+    
+    # Selección de ciudad
+    ciudad = st.selectbox("Selecciona una ciudad", ["Barcelona", "Madrid", "Valencia"])
+    
+    # Cargar datos para la ciudad seleccionada
+    df = cargar_datos()
+    
+    # Filtros
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        rango_precio = st.slider("Rango de precio", float(df['precio'].min()), float(df['precio'].max()), (float(df['precio'].min()), float(df['precio'].max())))
+    with col2:
+        tipo_habitacion = st.multiselect("Tipo de habitación", df['tipo_habitacion'].unique())
+    with col3:
+        min_resenas = st.number_input("Número mínimo de reseñas", min_value=0, value=0)
+    
+    # Aplicar filtros
+    df_filtrado = df[(df['precio'] >= rango_precio[0]) & (df['precio'] <= rango_precio[1])]
+    if tipo_habitacion:
+        df_filtrado = df_filtrado[df_filtrado['tipo_habitacion'].isin(tipo_habitacion)]
+    df_filtrado = df_filtrado[df_filtrado['numero_resenas'] >= min_resenas]
+    
+    # Visualizaciones
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Distribución de Precios")
+        fig = px.histogram(df_filtrado, x="precio", nbins=50)
+        st.plotly_chart(fig)
+        
+    with col2:
+        st.subheader("Precio Promedio por Barrio")
+        precios_barrio = df_filtrado.groupby("barrio")['precio'].mean().sort_values(ascending=False)
+        fig = px.bar(precios_barrio, x=precios_barrio.index, y=precios_barrio.values)
+        st.plotly_chart(fig)
+    
+    st.subheader("Ubicaciones de Airbnb")
+    m = folium.Map(location=[df_filtrado['latitud'].mean(), df_filtrado['longitud'].mean()], zoom_start=12)
+    for idx, row in df_filtrado.iterrows():
+        folium.Marker([row['latitud'], row['longitud']], popup=f"Precio: ${row['precio']}").add_to(m)
+    folium_static(m)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Distribución de Tipos de Habitación")
+        fig = px.pie(df_filtrado, names='tipo_habitacion', title='Distribución de Tipos de Habitación')
+        st.plotly_chart(fig)
+        
+    with col2:
+        st.subheader("Precio vs. Número de Reseñas")
+        fig = px.scatter(df_filtrado, x="numero_resenas", y="precio", color="tipo_habitacion", hover_name="nombre")
+        st.plotly_chart(fig)
+
+# Análisis de reseñas
+def analisis_resenas():
+    st.header("Análisis de Reseñas")
+    
+    # Cargar datos de reseñas (marcador de posición)
+    df_resenas = pd.DataFrame()
+    
+    # Análisis de sentimiento
+    sia = SentimentIntensityAnalyzer()
+    df_resenas['sentimiento'] = df_resenas['comentarios'].apply(lambda x: sia.polarity_scores(x)['compound'])
+    
+    # Visualizaciones
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Distribución de Sentimiento")
+        fig = px.histogram(df_resenas, x="sentimiento", nbins=50)
+        st.plotly_chart(fig)
+        
+    with col2:
+        st.subheader("Sentimiento Promedio por Propiedad")
+        sentimiento_propiedad = df_resenas.groupby("id_anuncio")['sentimiento'].mean().sort_values(ascending=False)
+        fig = px.bar(sentimiento_propiedad, x=sentimiento_propiedad.index, y=sentimiento_propiedad.values)
+        st.plotly_chart(fig)
+    
+    st.subheader("Nube de Palabras de Reseñas")
+    # Agregar visualización de nube de palabras aquí
+    
+    st.subheader("Palabras Más Positivas y Negativas")
+    # Agregar visualización de palabras más positivas y negativas
+    
+    st.subheader("Sentimiento a lo Largo del Tiempo")
+    # Agregar visualización de tendencias de sentimiento a lo largo del tiempo
+
+# Herramienta de análisis de IA
+def herramienta_analisis_ia():
+    st.header("Herramienta de Análisis de IA")
+    
+    url_anuncio = st.text_input("Ingresa la URL del anuncio de Airbnb")
+    
+    if st.button("Analizar"):
+        # Obtener datos del anuncio (marcador de posición)
+        datos_anuncio = {}
+        
+        # Realizar análisis (marcador de posición)
+        resultados_analisis = {}
+        
+        # Actualizar dataframe
+        nueva_fila = pd.DataFrame([resultados_analisis])
+        st.session_state.anuncios_analizados = pd.concat([st.session_state.anuncios_analizados, nueva_fila], ignore_index=True)
+        
+        # Mostrar resultados
+        st.subheader("Resultados del Análisis")
+        st.write(resultados_analisis)
+        
+        # Visualizaciones
+        st.subheader("Comparación con Otros Anuncios")
+        # Agregar visualizaciones comparando el anuncio analizado con otros
+
+    # Mostrar dataframe de anuncios analizados
+    st.subheader("Anuncios Analizados")
+    st.dataframe(st.session_state.anuncios_analizados)
+
+# Modelo de predicción
+def modelo_prediccion():
+    st.header("Modelo de Predicción")
+    
+    # Cargar y preparar datos (marcador de posición)
+    df = pd.DataFrame()
+    X = df[['caracteristica1', 'caracteristica2', 'caracteristica3']]
+    y = df['objetivo']
+    
+    # Dividir datos
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Entrenar modelo
+    modelo = RandomForestRegressor(n_estimators=100, random_state=42)
+    modelo.fit(X_train, y_train)
+    
+    # Hacer predicciones
+    y_pred = modelo.predict(X_test)
+    
+    # Evaluar modelo
+    mse = mean_squared_error(y_test, y_pred)
+    r2 = r2_score(y_test, y_pred)
+    
+    st.subheader("Rendimiento del Modelo")
+    st.write(f"Error Cuadrático Medio: {mse}")
+    st.write(f"Puntuación R-cuadrado: {r2}")
+    
+    # Importancia de características
+    importancia_caracteristicas = pd.DataFrame({'caracteristica': X.columns, 'importancia': modelo.feature_importances_})
+    importancia_caracteristicas = importancia_caracteristicas.sort_values('importancia', ascending=False)
+    
+    st.subheader("Importancia de Características")
+    fig, ax = plt.subplots()
+    sns.barplot(x='importancia', y='caracteristica', data=importancia_caracteristicas, ax=ax)
+    st.pyplot(fig)
+    
+    # Gráfico de residuos
+    residuos = y_test - y_pred
+    fig, ax = plt.subplots()
+    sns.scatterplot(x=y_pred, y=residuos, ax=ax)
+    ax.set_xlabel("Valores Predichos")
+    ax.set_ylabel("Residuos")
+    ax.set_title("Gráfico de Residuos")
+    st.pyplot(fig)
+
+# Aplicación principal
+def main():
+    st.sidebar.title("Índice")
+    page = st.sidebar.selectbox("Selecciona una página", ("Inicio", "Panel Principal", "Análisis de Reseñas", "Herramienta de Análisis de IA", "Modelo de Predicción"))
+    
+    if page == "Inicio":
+        intro()
+    elif page == "Panel Principal":
+        panel_principal()
+    elif page == "Análisis de Reseñas":
+        analisis_resenas()
+    elif page == "Herramienta de Análisis de IA":
+        herramienta_analisis_ia()
+    elif page == "Modelo de Predicción":
+        modelo_prediccion()
+
+if __name__ == "__main__":
+    main()
