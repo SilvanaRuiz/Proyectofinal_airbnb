@@ -1,0 +1,99 @@
+import numpy as np
+import pandas as pd
+from sklearn.impute import KNNImputer
+from sklearn.preprocessing import RobustScaler
+from sklearn.cluster import DBSCAN
+from sklearn.metrics import silhouette_score
+import joblib
+import os
+import pickle
+
+def robust_preprocessing(df):
+    #Eliminar columnas no necesarias
+    df = df.drop(['Unnamed: 0', 'title', 'all_reviews', 'complete_data_list'], axis=1)
+    
+    #Convertir columnas a tipos de datos apropiados
+    df['guest_favorite'] = df['guest_favorite'].astype(bool)
+    df['rating'] = df['rating'].astype(float)
+    df['number_reviews'] = df['number_reviews'].astype(float)
+    
+    #Codificar variables categóricas
+    df['type_host'] = pd.get_dummies(df['type_host'], drop_first=True)
+    df['hosting_time'] = pd.get_dummies(df['hosting_time'], drop_first=True)
+    
+    #Extraer valor numérico del precio
+    df['price'] = df['price'].str.replace('€', '').str.strip().astype(float)
+    
+    #Tratamiento de NaNs
+    imputer = KNNImputer(n_neighbors=5)
+    df_imputed = pd.DataFrame(imputer.fit_transform(df), columns=df.columns)
+    
+    #Tratamiento de outliers
+    def tukey_fence(x, k=2.5):
+        q1, q3 = x.quantile([0.25, 0.75])
+        iqr = q3 - q1
+        lower_bound = q1 - k * iqr
+        upper_bound = q3 + k * iqr
+        return np.where((x < lower_bound) | (x > upper_bound), np.nan, x)
+    
+    numeric_columns = df_imputed.select_dtypes(include=[np.number]).columns
+    df_outliers = df_imputed.copy()
+    df_outliers[numeric_columns] = df_outliers[numeric_columns].apply(tukey_fence)
+    
+    # Escalado robusto de datos
+    scaler = RobustScaler()
+    df_scaled = pd.DataFrame(scaler.fit_transform(df_outliers), columns=df_outliers.columns)
+    
+    return df_scaled, imputer, scaler
+
+def fine_tuned_dbscan(X):
+    eps_range = np.arange(0.1, 1.1, 0.1)
+    min_samples_range = range(2, 11)
+    best_silhouette = -1
+    best_params = {}
+    
+    for eps in eps_range:
+        for min_samples in min_samples_range:
+            dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+            labels = dbscan.fit_predict(X)
+            if len(np.unique(labels)) > 1:
+                silhouette = silhouette_score(X, labels)
+                if silhouette > best_silhouette:
+                    best_silhouette = silhouette
+                    best_params = {'eps': eps, 'min_samples': min_samples}
+    
+    return DBSCAN(**best_params)
+
+#Cargar y preprocesar los datos
+df = pd.read_csv('lv1.csv')
+df_preprocessed, imputer, scaler = robust_preprocessing(df)
+
+#Aplicar DBSCAN optimizado
+dbscan = fine_tuned_dbscan(df_preprocessed)
+cluster_labels = dbscan.fit_predict(df_preprocessed)
+
+print("Preprocesamiento y optimización completados.")
+
+#Guardar objetos de preprocesamiento
+output_dir = 'preprocessing_objects'
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
+joblib.dump(imputer, os.path.join(output_dir, 'imputer.joblib'))
+joblib.dump(scaler, os.path.join(output_dir, 'scaler.joblib'))
+joblib.dump(dbscan, os.path.join(output_dir, 'dbscan.joblib'))
+
+print(f"Objetos de preprocesamiento guardados en {output_dir}")
+
+#Guardar nombres de columnas
+with open('column_names.pkl', 'wb') as f:
+    pickle.dump(df_preprocessed.columns.tolist(), f)
+
+print("Nombres de columnas guardados en column_names.pkl")
+
+#Mostrar información sobre los datos preprocesados
+print("\nInformación sobre los datos preprocesados:")
+print(df_preprocessed.info())
+print("\nEstadísticas descriptivas:")
+print(df_preprocessed.describe())
+print("\nNúmero de clusters encontrados:", len(np.unique(cluster_labels)))
