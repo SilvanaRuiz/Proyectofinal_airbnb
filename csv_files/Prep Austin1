@@ -1,0 +1,131 @@
+import numpy as np
+import pandas as pd
+from sklearn.impute import SimpleImputer
+from sklearn.preprocessing import RobustScaler, OneHotEncoder
+from sklearn.cluster import DBSCAN
+from sklearn.metrics import silhouette_score
+from sklearn.compose import ColumnTransformer
+import joblib
+import os
+import pickle
+import inspect
+
+def robust_preprocessing(df):
+    #Separar columnas numéricas y categóricas
+    numeric_features = df.select_dtypes(include=['int64', 'float64']).columns
+    categorical_features = df.select_dtypes(include=['object']).columns
+
+    #Preprocesamiento para columnas numéricas
+    numeric_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', RobustScaler())
+    ])
+
+    #Preprocesamiento para columnas categóricas
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),
+        ('onehot', OneHotEncoder(handle_unknown='ignore'))
+    ])
+
+    #Combinar preprocesadores
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numeric_transformer, numeric_features),
+            ('cat', categorical_transformer, categorical_features)
+        ])
+
+    #Ajustar y transformar los datos
+    df_preprocessed = preprocessor.fit_transform(df)
+    
+    #Convertir a DataFrame
+    feature_names = (numeric_features.tolist() + 
+                     preprocessor.named_transformers_['cat'].named_steps['onehot'].get_feature_names(categorical_features).tolist())
+    df_preprocessed = pd.DataFrame(df_preprocessed, columns=feature_names)
+    
+    return df_preprocessed, preprocessor
+
+def fine_tuned_dbscan(X):
+    eps_range = np.arange(0.1, 1.1, 0.1)
+    min_samples_range = range(2, 11)
+    best_silhouette = -1
+    best_params = {}
+    
+    for eps in eps_range:
+        for min_samples in min_samples_range:
+            dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+            labels = dbscan.fit_predict(X)
+            if len(np.unique(labels)) > 1:
+                silhouette = silhouette_score(X, labels)
+                if silhouette > best_silhouette:
+                    best_silhouette = silhouette
+                    best_params = {'eps': eps, 'min_samples': min_samples}
+    
+    return DBSCAN(**best_params)
+
+#Cargar el CSV
+df = pd.read_csv('austin1.csv')
+
+#Preprocesamiento robusto
+df_preprocessed, preprocessor = robust_preprocessing(df)
+
+#Aplicar DBSCAN optimizado
+dbscan = fine_tuned_dbscan(df_preprocessed)
+cluster_labels = dbscan.fit_predict(df_preprocessed)
+
+print("Preprocesamiento y optimización completados.")
+
+def save_preprocessing_objects(preprocessor, dbscan, output_dir='preprocessing_objects'):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    joblib.dump(preprocessor, os.path.join(output_dir, 'preprocessor.joblib'))
+    joblib.dump(dbscan, os.path.join(output_dir, 'dbscan.joblib'))
+    
+    print(f"Objetos de preprocesamiento guardados en {output_dir}")
+
+def save_preprocessing_functions(output_file='preprocessing_functions.py'):
+    functions_to_save = [
+        robust_preprocessing,
+        fine_tuned_dbscan
+    ]
+    
+    with open(output_file, 'w') as f:
+        for func in functions_to_save:
+            f.write(f"{func.__name__} = {inspect.getsource(func)}\n\n")
+    
+    print(f"Funciones de preprocesamiento guardadas en {output_file}")
+
+def save_column_names(df, output_file='column_names.pkl'):
+    with open(output_file, 'wb') as f:
+        pickle.dump(df.columns.tolist(), f)
+    
+    print(f"Nombres de columnas guardados en {output_file}")
+
+#Guardar objetos y funciones de preprocesamiento
+save_preprocessing_objects(preprocessor, dbscan)
+save_preprocessing_functions()
+save_column_names(df)
+
+def load_and_apply_preprocessing(new_data, preprocessing_dir='preprocessing_objects'):
+    preprocessor = joblib.load(os.path.join(preprocessing_dir, 'preprocessor.joblib'))
+    dbscan = joblib.load(os.path.join(preprocessing_dir, 'dbscan.joblib'))
+    
+    with open('column_names.pkl', 'rb') as f:
+        original_columns = pickle.load(f)
+    
+    #Asegurar que new_data tiene las mismas columnas que los datos originales
+    new_data = new_data.reindex(columns=original_columns, fill_value=np.nan)
+    
+    #Aplicar preprocesamiento
+    new_data_preprocessed = preprocessor.transform(new_data)
+    
+    #Aplicar DBSCAN
+    cluster_labels = dbscan.fit_predict(new_data_preprocessed)
+    
+    return new_data_preprocessed, cluster_labels
+
+print("Funciones de carga y aplicación de preprocesamiento creadas.")
+
+#Ejemplo de cómo usar la función de carga y aplicación
+#new_data = pd.read_csv('new_data.csv')
+#X_processed, cluster_labels = load_and_apply_preprocessing(new_data)
