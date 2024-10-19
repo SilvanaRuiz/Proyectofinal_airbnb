@@ -40,7 +40,7 @@ def robust_preprocessing(df):
     df_outliers = df_imputed.copy()
     df_outliers[numeric_columns] = df_outliers[numeric_columns].apply(tukey_fence)
     
-    # Escalado robusto de datos
+    #Escalado robusto de datos
     scaler = RobustScaler()
     df_scaled = pd.DataFrame(scaler.fit_transform(df_outliers), columns=df_outliers.columns)
     
