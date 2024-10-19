@@ -1,0 +1,155 @@
+import numpy as np
+import pandas as pd
+from sklearn.impute import KNNImputer
+from sklearn.preprocessing import RobustScaler
+from sklearn.cluster import DBSCAN
+from imblearn.over_sampling import SMOTE
+from scipy import stats
+from sklearn.metrics import silhouette_score
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import cross_val_score
+import joblib
+import os
+import pickle
+import inspect
+
+def robust_preprocessing(df):
+    #Seleccionar solo columnas numéricas
+    numeric_columns = df.select_dtypes(include=[np.number]).columns
+    df_numeric = df[numeric_columns]
+    
+    #Tratamiento de NaNs
+    imputer = KNNImputer(n_neighbors=5)
+    df_imputed = pd.DataFrame(imputer.fit_transform(df_numeric), columns=df_numeric.columns)
+    
+    #Tratamiento de outliers
+    def tukey_fence(x, k=2.5):
+        q1, q3 = x.quantile([0.25, 0.75])
+        iqr = q3 - q1
+        lower_bound = q1 - k * iqr
+        upper_bound = q3 + k * iqr
+        return np.where((x < lower_bound) | (x > upper_bound), np.nan, x)
+    
+    df_outliers = df_imputed.apply(tukey_fence)
+    
+    #Escalado robusto de datos
+    scaler = RobustScaler()
+    df_scaled = pd.DataFrame(scaler.fit_transform(df_outliers), columns=df_outliers.columns)
+    
+    return df_scaled, imputer, scaler
+
+def fine_tuned_dbscan(X):
+    eps_range = np.arange(0.1, 1.1, 0.1)
+    min_samples_range = range(2, 11)
+    best_silhouette = -1
+    best_params = {}
+    
+    for eps in eps_range:
+        for min_samples in min_samples_range:
+            dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+            labels = dbscan.fit_predict(X)
+            if len(np.unique(labels)) > 1:
+                silhouette = silhouette_score(X, labels)
+                if silhouette > best_silhouette:
+                    best_silhouette = silhouette
+                    best_params = {'eps': eps, 'min_samples': min_samples}
+    
+    return DBSCAN(**best_params)
+
+def fine_tuned_smote(X, y):
+    k_neighbors_range = range(1, 6)  # Reducido el rango para ahorrar tiempo
+    best_f1 = 0
+    best_params = {}
+    
+    for k in k_neighbors_range:
+        smote = SMOTE(k_neighbors=k, random_state=42)
+        X_resampled, y_resampled = smote.fit_resample(X, y)
+        
+        clf = RandomForestClassifier(random_state=42)
+        scores = cross_val_score(clf, X_resampled, y_resampled, cv=5, scoring='f1_macro')
+        mean_f1 = np.mean(scores)
+        
+        if mean_f1 > best_f1:
+            best_f1 = mean_f1
+            best_params = {'k_neighbors': k}
+    
+    return SMOTE(**best_params, random_state=42)
+
+#Cargar el CSV
+df = pd.read_csv('ny_1.csv')
+
+#Preprocesamiento robusto
+df_preprocessed, imputer, scaler = robust_preprocessing(df)
+
+#Aplicar DBSCAN optimizado
+dbscan = fine_tuned_dbscan(df_preprocessed)
+cluster_labels = dbscan.fit_predict(df_preprocessed)
+
+#No podemos aplicar SMOTE porque no tenemos una variable objetivo clara
+
+print("Preprocesamiento y optimización completados.")
+
+def save_preprocessing_objects(imputer, scaler, dbscan, output_dir='preprocessing_objects'):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    joblib.dump(imputer, os.path.join(output_dir, 'imputer.joblib'))
+    joblib.dump(scaler, os.path.join(output_dir, 'scaler.joblib'))
+    joblib.dump(dbscan, os.path.join(output_dir, 'dbscan.joblib'))
+    
+    print(f"Objetos de preprocesamiento guardados en {output_dir}")
+
+def save_preprocessing_functions(output_file='preprocessing_functions.py'):
+    functions_to_save = [
+        robust_preprocessing,
+        fine_tuned_dbscan,
+        fine_tuned_smote,
+        tukey_fence
+    ]
+    
+    with open(output_file, 'w') as f:
+        for func in functions_to_save:
+            f.write(f"{func.__name__} = {inspect.getsource(func)}\n\n")
+    
+    print(f"Funciones de preprocesamiento guardadas en {output_file}")
+
+def save_column_names(df, output_file='column_names.pkl'):
+    with open(output_file, 'wb') as f:
+        pickle.dump(df.columns.tolist(), f)
+    
+    print(f"Nombres de columnas guardados en {output_file}")
+
+#Guardar objetos y funciones de preprocesamiento
+save_preprocessing_objects(imputer, scaler, dbscan)
+save_preprocessing_functions()
+save_column_names(df)
+
+def load_and_apply_preprocessing(new_data, preprocessing_dir='preprocessing_objects'):
+    imputer = joblib.load(os.path.join(preprocessing_dir, 'imputer.joblib'))
+    scaler = joblib.load(os.path.join(preprocessing_dir, 'scaler.joblib'))
+    dbscan = joblib.load(os.path.join(preprocessing_dir, 'dbscan.joblib'))
+    
+    with open('column_names.pkl', 'rb') as f:
+        original_columns = pickle.load(f)
+    
+    #Seleccionar solo columnas numéricas
+    numeric_columns = new_data.select_dtypes(include=[np.number]).columns
+    new_data_numeric = new_data[numeric_columns]
+    
+    #Asegurar que new_data tiene las mismas columnas numéricas que los datos originales
+    new_data_numeric = new_data_numeric.reindex(columns=[col for col in original_columns if col in numeric_columns], fill_value=np.nan)
+    
+    #Aplicar preprocesamiento
+    new_data_imputed = pd.DataFrame(imputer.transform(new_data_numeric), columns=new_data_numeric.columns)
+    new_data_scaled = pd.DataFrame(scaler.transform(new_data_imputed), columns=new_data_numeric.columns)
+    
+    #Aplicar DBSCAN
+    cluster_labels = dbscan.fit_predict(new_data_scaled)
+    
+    return new_data_scaled, cluster_labels
+
+print("Funciones de carga y aplicación de preprocesamiento creadas.")
+
+#Ejemplo de cómo usar la función de carga y aplicación
+#new_data = pd.read_csv('new_data.csv')
+#X_processed, cluster_labels = load_and_apply_preprocessing(new_data)
