@@ -1,44 +1,91 @@
-def clean_airbnb_data(df):
-    #Eliminamos columna unnamed
-    df = df.drop(columns='Unnamed: 0')
+import re
+import pandas as pd 
+
+def con_a_meses(hosting_time):
+    # Buscar "years" y convertir a meses
+    years_match = re.search(r'(\d+)\s+years', hosting_time)
+    if years_match:
+        years = int(years_match.group(1))
+        return years * 12
     
-    #Convertir 'rating' a float
-    df.replace({'rating':'reviews'}, np.nan, inplace=True)
-    df['rating'] = pd.to_numeric(df['rating'], errors='coerce')
-
-    #Extraemos el currency y creamos nueva columna
-    df['currency'] = df['price'].str.extract(r'([^\d.,]+)')
-    #Limpiar y convertir la columna 'price' en valores numéricos
-    df['price'] = df['price'].str.replace(r'[^\d.,]', '', regex=True)
-    df['price'] = pd.to_numeric(df['price'].str.replace(',', ''), errors='coerce')
-
-    #Convertir el hosting time a meses, para tener una medida uniforme
-    def convert_to_months(time_str):
-        if 'year' in time_str:
-            years = int(re.findall(r'(\d+)', time_str)[0])
-            months = years * 12
-        elif 'month' in time_str:
-            months = int(re.findall(r'(\d+)', time_str)[0])
-        else:
-            months = 0
+    years_match = re.search(r'(\d+)\s+year', hosting_time)
+    if years_match:
+        years = int(years_match.group(1))
+        return years * 12
+    
+    # Buscar "months" y dejar en meses
+    months_match = re.search(r'(\d+)\s+months', hosting_time)
+    if months_match:
+        months = int(months_match.group(1))
         return months
     
-    df['hosting_time']= df['hosting_time'].apply(convert_to_months)
+    # Buscar "days" y convertir a meses (aprox. 30 días = 1 mes)
+    days_match = re.search(r'(\d+)\s+days', hosting_time)
+    if days_match:
+        days = int(days_match.group(1))
+        return days / 30  # Convertir días a meses
     
-    #'type_host' a categoría y eliminamos lo de bathroom
-    df['type_host'] = df['type_host'].str.replace(r' · (Shared bathroom|Shared half bathroom|No bathroom)', '', regex=True)
-    df.replace({'type_host':''}, np.nan, inplace=True)
-    df.replace({'type_host':np.nan}, 'no_category', inplace=True)
+    return 0  # Si no hay coincidencia, devolver 0 meses
+def extract_price(price):
+        if isinstance(price, str):  # Asegurarse de que la entrada sea un string
+            match = re.search(r'[€$]\s*(\d+)',price)
+            if match:
+                return float(match.group(1))  # Convertir a float
+        return None  # Si no hay coincidencia o no es string, devuelve None
+def extract_guest(guest):
+    if isinstance(guest,str):
+        match = re.search(r'(\d+)\s+guests', guest)
+        if match:
+            return float(match.group(1))
+    return None
 
-    #Por problemas de scrapping hay datos que no hemos podido obtener pero obtendremos, por el momento eliminaremos las colundas con Nan
-    for i, row in df.iterrows():
-        if row.isnull().any(): 
-            df.drop(i, inplace=True)
-   
-    #Reordenar columnas
-    column_order = ['guest_favorite', 'rating', 'number_reviews', 'type_host', 
-                    'hosting_time', 'price','currency',  'all_reviews']
-    df = df[column_order]
+def extract_bedroom(room):
+    if isinstance(room,str):
+        match = re.search(r'(\d+)\s+bedroom(s)?', room)
+        if match:
+            return float(match.group(1))
+        if re.search(r'\bstudio\b', room, re.IGNORECASE):
+            return 1
+    return None
+
+def extract_bed(bed):
+    if isinstance(bed, str):
+        # Expresión regular que captura solo el número de camas, ignorando "bedroom"
+        match = re.search(r'(\d+)\s+(?:\w+\s+)?(?:bed|beds)(?!room)', bed, re.IGNORECASE)
+        if match:
+            return float(match.group(1))  
+    return None
+
+
+def extract_bathroom(bath):
+    # Verifica si se menciona "shared"
+    if re.search(r'\bshared\b', bath, re.IGNORECASE):
+        return "shared"  # Retorna "shared" si se menciona
+    else:
+        return "private" 
+
+
+def limpiezadedatos(df):
+    # Limpiar la columna rating: extraer los últimos 4 dígitos y convertir a float
+    df['rating'] = df['rating'].str.extract(r'(\d\.\d{1,2})$').astype(float)
+
+    # Convertir number_reviews a float
+    df['number_reviews'] = pd.to_numeric(df['number_reviews'], errors='coerce')
+
+    # Limpiar la columna price: eliminar símbolos y convertir a float
+    df['price'] = df['price'].apply(extract_price)
+
+    # Guardar el dataframe limpio en un nuevo CSV
+    #df.to_csv('proyectoairbnblimpio.csv', index=False)
     
+    # Convertimos a meses 
+    df['hosting_time'] = df['hosting_time'].apply(con_a_meses)
+
+    # Convertimos guest_favorite
+    df['guest_favorite'] = df['guest_favorite'].astype(int)
+    #Creamos la nuevas columnas 
+    df['number_guest']= df['complete_data_list'].apply(extract_guest)
+    df['number_bedroom']= df['complete_data_list'].apply(extract_bedroom)
+    df['number_beds']= df['complete_data_list'].apply(extract_bed)
+    df['type_bathroom']= df['complete_data_list'].apply(extract_bathroom)
     return df
-df_clean = clean_airbnb_data(df)
