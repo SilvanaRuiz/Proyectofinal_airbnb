@@ -101,7 +101,7 @@ def extract_data_from_db():
     engine = create_engine('mysql+pymysql://root:password@localhost/Airbnb')
 
     # Consulta SQL para seleccionar todos los registros de la tabla airbnb_listings
-    query = "SELECT * FROM airbnb_listings"
+    query = "SELECT * FROM airbnb_listings_1"
 
     # Leer los datos directamente en un DataFrame
     df = pd.read_sql(query, engine)
