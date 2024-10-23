@@ -1,0 +1,57 @@
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Configuración de la página
+st.set_page_config(page_title="Airbnb Analysis App", layout="wide")
+
+# Inicio: Acerca de la app
+st.title("Bienvenido a la App de Análisis de Airbnb")
+st.markdown("""
+Esta aplicación está diseñada para proporcionar un análisis exploratorio de datos sobre listados de Airbnb en Austin.
+- **Analista:** Steven
+- **Desarrolladora:** Silvana
+
+Explora las características, realiza análisis de sentimiento en las reseñas y calcula la viabilidad de tu propio Airbnb.
+""")
+# Cargar datos
+df = pd.read_csv('austin1.csv')
+
+# Análisis exploratorio
+st.header("Análisis Exploratorio")
+st.subheader("Distribución de Precios")
+fig, ax = plt.subplots()
+sns.histplot(df['price'], bins=20, kde=True, ax=ax)
+ax.set_title('Distribución de precios')
+st.pyplot(fig)
+
+st.subheader("Calificaciones por tipo de anfitrión")
+fig, ax = plt.subplots()
+sns.boxplot(x='type_host', y='rating', data=df, ax=ax)
+ax.set_title('Calificaciones por tipo de anfitrión')
+st.pyplot(fig)
+
+st.markdown("""
+En este análisis exploratorio, observamos la distribución de precios y las calificaciones según el tipo de anfitrión. 
+Podemos ver que los superanfitriones tienden a tener calificaciones más altas.
+""")
+
+# NLP vs reviews
+st.header("Análisis NLP en Reseñas")
+st.markdown("""
+Debido a las limitaciones de tiempo en la extracción de datos en tiempo real, aquí mostramos ejemplos preprocesados 
+de análisis de sentimiento en las reseñas. Esto nos permite obtener insights sobre la satisfacción del cliente.
+""")
+
+# Calculadora para montar tu Airbnb
+st.header("Calculadora para Montar tu Airbnb")
+price = st.number_input("Introduce el precio por noche (en €):", min_value=0)
+occupancy_rate = st.slider("Tasa de ocupación esperada (%):", 0, 100, 75)
+monthly_income = price * occupancy_rate / 100 * 30  # Asumiendo 30 días al mes
+
+st.write(f"Ingreso mensual estimado: €{monthly_income:.2f}")
+
+# Mapa con ubicaciones (si es factible)
+if st.checkbox("Mostrar mapa con ubicaciones de Airbnb"):
+    st.map(df[['latitude', 'longitude']])
