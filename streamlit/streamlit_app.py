@@ -1,5 +1,5 @@
 import streamlit as st
-
+python3 -m venv nombre
 import requests
 
 def intro():
