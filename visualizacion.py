@@ -7,7 +7,24 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 
-df = pd.read_csv('csv_files/Archivoaustin1limpio.csv')  # Cambia esto por la ruta correcta de tu archivo de datos
+df = pd.read_csv('csv_files/ArchivoSanFrancisco2limpio.csv') 
+
+#Agraga los archivos
+csv_files = {
+    "Austin": "csv_files/Archivoaustin1limpio.csv",
+    "Charlotte": "csv_files/Archivocharlotte1limpio.csv",
+    "San Francisco": "csv_files/ArchivoSanFrancisco2limpio.csv"
+    
+}
+
+selected_city = st.selectbox("Selecciona el archivo para analizar:", list(csv_files.keys()))
+
+selected_file_path = csv_files[selected_city]
+df = pd.read_csv(selected_file_path)
+
+# Muestra
+st.write(f"Archivo seleccionado: {selected_city}")
+
 #estilos
 sns.set(style="whitegrid")  # Fondo claro
 palette = ['#FF5A5F', '#FFB400', '#00A699', '#FC642D']  # Paleta Airbnb
@@ -18,7 +35,20 @@ st.title("Visualización de Datos de Airbnb:")
 # Sidebar ( por si lo usare)
 st.sidebar.title("Información General")
 st.sidebar.markdown("Esta aplicación permite explorar datos clave de alojamientos en Airbnb.")
-st.sidebar.markdown("Usa el menú para navegar entre los gráficos.")
+st.sidebar.markdown("Histogramas y gráficos de barras:  ")
+st.sidebar.markdown("Estos gráficos muestran cómo están distribuidos los valores en cada variable, permitiendo detectar si siguen una distribución normal o si presentan sesgos, datos atípicos o asimetrías.")
+st.sidebar.markdown("Gráficos de densidad:  ")
+st.sidebar.markdown("Ayudan a visualizar las distribuciones de manera más detallada que los histogramas, lo cual es útil para variables numéricas continuas y para comparar distribuciones entre subgrupos.")
+
+
+
+
+
+
+
+
+
+#######################################################################
 
 # Distribución de Calificación
 st.header("Distribución de Calificación")
@@ -112,21 +142,21 @@ plt.title('Mapa de Calor de Correlación', fontsize=20, weight='bold')
 st.pyplot(plt.gcf())
 
 
-# Crear el gráfico 3D
-fig = px.scatter_3d(
-    df, x='rating', y='price', z='number_reviews',
-    color='guest_favorite', size='number_reviews',
-    title='Relación Precio-Rating-Número de Reviews'
-)
+# # Crear el gráfico 3D
+# fig = px.scatter_3d(
+#     df, x='rating', y='price', z='number_reviews',
+#     color='guest_favorite', size='number_reviews',
+#     title='Relación Precio-Rating-Número de Reviews'
+# )
 
-# Título de la aplicación
-st.title("Visualización 3D de Datos de Airbnb")
+# # Título de la aplicación
+# st.title("Visualización 3D de Datos de Airbnb")
 
-# Botón para mostrar el gráfico
-if st.button("Mostrar Gráfico 3D"):
-    st.plotly_chart(fig)
+# # Botón para mostrar el gráfico
+# if st.button("Mostrar Gráfico 3D"):
+#     st.plotly_chart(fig)
 
-# # Gráfico 3D de Precio, Calificación y Número de Reseñas
-# st.header("Relación Precio-Rating-Número de Reseñas")
-# fig = px.scatter_3d(df, x='rating', y='price', z='number_reviews', color='guest_favorite', size='number_reviews', title='Relación Precio-Rating-Número de Reviews')
-# st.plotly_chart(fig, use_container_width=True)
+# # # Gráfico 3D de Precio, Calificación y Número de Reseñas
+# # st.header("Relación Precio-Rating-Número de Reseñas")
+# # fig = px.scatter_3d(df, x='rating', y='price', z='number_reviews', color='guest_favorite', size='number_reviews', title='Relación Precio-Rating-Número de Reviews')
+# # st.plotly_chart(fig, use_container_width=True)
