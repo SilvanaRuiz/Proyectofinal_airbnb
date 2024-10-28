@@ -34,11 +34,7 @@ El propósito de este proyecto es desarrollar una aplicación que permita:
 
 El proyecto sigue una estructura modular para una fácil navegación y mantenimiento. 
 
-├── csv_files/ │ ── Stremlit_26.py 
-# Código principal de la aplicación Streamlit ├── models/ 
-# Modelos de ML y NLP ├── notebooks/ 
-# Jupyter notebooks para experimentación y pruebas ├── requirimientos.txt 
-# Dependencias └── README.md 
+├── csv_files/ │ ── Stremlit_26.py # Código principal de la aplicación Streamlit ├── models/ # Modelos de ML y NLP ├── notebooks/ # Jupyter notebooks para experimentación y pruebas ├── requirimientos.txt # Dependencias └── README.md 
 
 # Documentación del proyecto
 
